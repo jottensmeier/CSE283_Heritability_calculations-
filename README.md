@@ -1,1 +1,1 @@
-# CSE283_Heritability_calculations-
+# CSE283_Heritability_calculations-using causal TWAS
