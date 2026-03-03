@@ -1,0 +1,7 @@
+disease	dataset	gwas_n	study
+IBD	ebi-a-GCST004131	59957	mashr_Adipose_Subcutaneous
+LDL	ukb-d-30780_irnt	343621	mashr_Adipose_Subcutaneous
+SBP	ukb-a-360	317754	mashr_Adipose_Subcutaneous
+IBD	ebi-a-GCST004131	59957	mashr_Liver
+LDL	ukb-d-30780_irnt	343621	mashr_Liver
+SBP	ukb-a-360	317754	mashr_Liver

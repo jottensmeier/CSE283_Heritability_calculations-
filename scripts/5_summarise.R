@@ -25,15 +25,63 @@ get_script_dir <- function() {
 
 paste_path <- function(name, path) { glue("{path}{name}") }
 
-extract_path <- function(path, name) {
-  base_path <- glue("{path}{name}/")
-  files <- list.files(base_path)
+# Function to make compatible with snakemake but not
+# break original modality of providing dir name
+# rather than list of paths
+extract_path <- function(files_path) {
 
-  setNames(
-    lapply(files, paste_path, path = base_path),
-    files
-  )
+  # If single directory → expand
+  if (length(files_path) == 1 && dir.exists(files_path)) {
+
+    files <- list.files(
+      files_path,
+      pattern = "\\.RDS$",
+      full.names = TRUE
+    )
+    print("One file passed")
+
+  } else {
+
+    # Assume vector of file paths
+    files <- unlist(files_path)
+    print("Multiple files passed")
+    print(class(files))
+    # Basic validation
+
+    if (!all(file.exists(files))) {
+      missing <- files[!file.exists(files)]
+      stop("Missing files:\n", paste(missing, collapse = "\n"))
+    }
+
+  }
+
+  # Keep only RDS files
+  files <- files[grepl("\\.RDS$", files)]
+
+  if (length(files) == 0) {
+    stop("No .RDS files found.")
+  }
+
+  names(files) <- tools::file_path_sans_ext(basename(files))
+  print(names(files))
+
+  return(files)
 }
+
+# extract_path <- function(files_path) {
+
+  
+#   files_path <- list.files(files_path,
+#                            pattern = "\\.RDS$",
+#                            full.names = TRUE)
+
+#   names(files_path) <- gsub("\\.RDS",
+#                             "",
+#                             basename(files_path))
+
+#   return(files_path)
+
+# }
 
 ################################################################################
 ################################################################################
@@ -83,7 +131,7 @@ extract_finemap_df <- function(name, paths) {
 
 prepare_finemap_res <- function(input_path, snp_map) {
 
-  paths <- extract_path(input_path, "/finemap_res")
+  paths <- extract_path(input_path)
 
   finemap_res_list <- lapply(names(paths),
                              extract_finemap_df,
@@ -127,7 +175,7 @@ internal_lapply_herit_fun <- function(group_label, obj, gwas_n) {
 
 herit_table <- function(input_path, gwas_n) {
 
-  paths <- extract_path(input_path, "/param")
+  paths <- extract_path(input_path)
 
   dfs <- lapply(names(paths),
                 FUN = internal_lapply_herit_fun,
@@ -146,73 +194,125 @@ herit_table <- function(input_path, gwas_n) {
 ################################################################################
 
 generate_frame <- function(name, param_sub_group_obj) {
+  vect <- param_sub_group_obj[[name]]
 
-  df <- data.table::data.table(name = names(param_sub_group_obj[[name]]),
-                   score = unname(param_sub_group_obj[[name]]),
-                   category = name)
+  df <- data.table::data.table(
+    name     = names(vect),
+    score    = unname(vect),
+    category = name
+  )
+
+  # # Ensure name column exists even if names(v) is NULL
+  # if (is.null(df$name)) df[, name := NA_character_]
+
   return(df)
 }
 
 summarise_parameters_single <- function(group_label, obj, gwas_n) {
   param <- readRDS(obj[[group_label]])
 
-  ctwas_parameters <- ctwas::summarize_param(param,
-                                             gwas_n,
-                                             enrichment_test = "fisher")
+  ctwas_parameters <- ctwas::summarize_param(
+    param,
+    gwas_n,
+    enrichment_test = "fisher"
+  )
 
   df <- data.table::rbindlist(
-
-         lapply(names(ctwas_parameters),
-                FUN = generate_frame,
-                param_sub_group_obj = ctwas_parameters),
-
-                use.names = TRUE, fill = TRUE
-                )
-  
+    lapply(names(ctwas_parameters),
+           FUN = generate_frame,
+           param_sub_group_obj = ctwas_parameters),
+    use.names = TRUE,
+    fill = TRUE
+  )
 
   # gene names present in df (excluding SNP and NA)
   gene_names <- df[!is.na(name) & name != "SNP", unique(name)]
 
-  if (length(gene_names) > 1L) {
-    stop("Expected at most one tissue-context (non-SNP name) in df, found",
-    length(gene_names), gene_names,
-    ",")
-  }
+  # gene names present in df (excluding SNP and NA)
+  gene_names <- df[!is.na(name) & name != "SNP", unique(name)]
 
-  tot_snp <- data.table::copy(df[category == "total_pve"])
+  # if (length(gene_names) > 1L) {
+  #   stop(
+  #     sprintf(
+  #       "Expected at most one tissue-context (non-SNP name) in df, found %d: %s",
+  #       length(gene_names),
+  #       paste(gene_names, collapse = ", ")
+  #     )
+  #   )
+  # }
+  
+  # Add explicit totals for SNP and gene (if a gene name exists)
+  tot_base <- df[category == "total_pve" & !is.na(score)]
+  tot_snp <- data.table::copy(tot_base)
   tot_snp[, name := "SNP"]
-  tot_gene <- data.table::copy(df[category == "total_pve"])
-  tot_gene[, name := gene_names]
+  tot_gene <- NULL
+
   # total_pve rows expanded for each gene name
+  df <- data.table::rbindlist(
+    list(
+      df[!is.na(name)],
+      tot_snp,
+      tot_gene
+    ),
+    use.names = TRUE,
+    fill = TRUE
+  )
 
-  df <- data.table::rbindlist(list(df[!is.na(name)], tot_snp, tot_gene))
+  df[, group_label := gsub("\\.RDS$", "", group_label)]
 
-  df[, `group_label` := gsub("\\.RDS$", "", group_label)]
-
+  df
   return(df)
 }
 
-summarise_parameters_iterative <- function(inputdir, gwas_n) {
+# summarise_parameters_iterative <- function(input_path, gwas_n) {
 
-  paths <- extract_path(inputdir, "/param")
 
-  dfs <- lapply(names(paths),
-                FUN = summarise_parameters_single,
-                obj = paths,
-                gwas_n = gwas_n)
+#   paths <- extract_path(input_path)
+#   print(paths)
 
-  # df <- dplyr::bind_rows(dfs)
+#   dfs <- lapply(names(paths),
+#                 FUN = summarise_parameters_single,
+#                 obj = paths,
+#                 gwas_n = gwas_n)
+
+#   # df <- dplyr::bind_rows(dfs)
+#   dfl <- data.table::rbindlist(dfs, use.names = TRUE, fill = TRUE)
+
+#   dfl[, label :=
+#     fcase(
+#       name == "SNP", paste(name, group_label, sep = "_"),
+#       default = paste0("gene_", group_label)
+#     )
+#   ]
+
+
+#   dfw <- dcast(dfl, label ~ category, value.var = "score")
+
+#   return(list(`long` = df, `wide` = dfw))
+# }
+
+summarise_parameters_iterative <- function(input_path, gwas_n) {
+
+  paths <- extract_path(input_path)
+  if (length(paths) == 0) stop("No input RDS files found in: ", input_path)
+
+  dfs <- lapply(
+    names(paths),
+    FUN = summarise_parameters_single,
+    obj = paths,
+    gwas_n = gwas_n
+  )
+
   dfl <- data.table::rbindlist(dfs, use.names = TRUE, fill = TRUE)
 
-  dfl[, label :=
-    fcase(
-      name == "SNP", paste(name, group_label, sep = "_"),
-      default = paste0("gene_", group_label)
-    )
-  ]
+  dfl[, label := data.table::fcase(
+    name == "SNP", paste(name, group_label, sep = "_"),
+    default = paste0("gene_", group_label)
+  )]
 
-  dfw <- dcast(dfl, label ~ category, value.var = "score")
-  return(list(`long` = df, `wide` = dfw))
+  dfw <- data.table::dcast(dfl, label ~ category, value.var = "score")
+
+  list(long = dfl, wide = dfw)
 }
 
 ################################################################################
@@ -228,54 +328,70 @@ summarise_parameters_iterative <- function(inputdir, gwas_n) {
 
 ################################################################################
 ################################################################################
+save_files <- function(List, prefix) {
 
-save_files <- function(List, study, out) {
+  # Create output directory if it does not exist
+  dir.create(prefix, recursive = TRUE, showWarnings = FALSE)
 
-  # Ensure trailing slash
-  out <- if (endsWith(out, "/")) out else glue("{out}/")
-
-  # Create study-specific output directory
-  out_dir <- glue("{out}{study}")
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
-  # Save each element of the list as TSV
+  # Save each element as TSV
   lapply(names(List), function(x) {
-    file_path <- glue("{out_dir}/{x}.tsv")
-    write.table(List[[x]], file=file_path, sep="\t", row.names=FALSE, quote=FALSE)
+
+    file_path <- file.path(prefix, paste0(x, ".tsv"))
+  
+    print(head(file_path))
+    print(List[[x]])
+  
+    write.table(
+      List[[x]],
+      file = file_path,
+      sep = "\t",
+      row.names = FALSE,
+      quote = FALSE
+    )
   })
 }
+################################################################################
+################################################################################
+
+# find_gwas_n <- function(metatable_path, study, gwas_n) {
+
+#   if (!is.null(metatable_path) && !is.null(study)) {
+#     gwas_n <- extract_gwas_n(metatable_path, study)
+
+#   } else if (!is.null(gwas_n)) {
+#     gwas_n <- gwas_n
+
+#   } else {
+#     stop(
+#       "WARNING - Must provide EITHER metatable_path AND study name OR gwas_n"
+#     )
+#   }
+#   return(gwas_n)
+# }
 
 ################################################################################
 ################################################################################
 
-find_gwas_n <- function(metatable_path, study, gwas_n) {
+# main <- function(finemap_path,
+#                  param_path,
+#                  screen_res_path,
+#                  susie_alpha_res_path,
+#                  z_gene_path,
+#                  snp_map_path,
+#                  gwas_n)
 
-  if (!is.null(metatable_path) && !is.null(study)) {
-    gwas_n <- extract_gwas_n(metatable_path, study)
-
-  } else if (!is.null(gwas_n)) {
-    gwas_n <- gwas_n
-
-  } else {
-    stop(
-      "WARNING - Must provide EITHER metatable_path AND study name OR gwas_n"
-    )
-  }
-  return(gwas_n)
-}
-
-################################################################################
-################################################################################
-
-main <- function(inputdir, snp_map_path, gwas_n) {
+main <- function(finemap_path,
+                 param_path,
+                 snp_map_path,
+                 gwas_n) {
 
   snp_map <- readRDS(snp_map_path)
 
-  finemap_res <- prepare_finemap_res(inputdir, snp_map)
+  finemap_res <- prepare_finemap_res(finemap_path, snp_map)
 
-  parameter_df_list <- summarise_parameters_iterative(inputdir, gwas_n)
+  parameter_df_list <- summarise_parameters_iterative(param_path, gwas_n)
 
-  heritability_table <- herit_table(inputdir, gwas_n)
+  heritability_table <- herit_table(param_path, gwas_n)
 
   # finemap_res_ss <- subset(finemap_res, group != "SNP" & susie_pip > 0.8 & !is.na(cs))
   message("Files processed")
@@ -310,32 +426,25 @@ if (sys.nframe() == 0) {
 
   parser <- ArgumentParser(description = "Prepare reference files for cTWAS")
 
-  parser$add_argument("--inputdir",
+  parser$add_argument("--finemap_path",
+                      nargs="+",
                       help = "",
-                      required = FALSE)
+                      required = TRUE)
+
+  parser$add_argument("--param_path",
+                      nargs="+",
+                      help = "",
+                      required = TRUE)
 
   parser$add_argument("--snp_map_path",
                       help = "",
                       required = FALSE)
-
-  parser$add_argument("--metatable_path",
-                      help = paste0("GWAS metatble containing ",
-                                    "Sample.name and sample_size cols"))
-
-  parser$add_argument("--study",
-                      help = "",
-                      required = FALSE,
-                      default = NULL)
 
   parser$add_argument("--gwas_n",
                       help = "",
                       required = FALSE,
                       default = NULL,
                       type = "integer")
-
-  parser$add_argument("--genome_version",
-                      help = "genome_version",
-                      required = TRUE)
 
   parser$add_argument("--outpath",
                       help = "outpath to .RDS files",
@@ -346,31 +455,40 @@ if (sys.nframe() == 0) {
 
   args <- parser$parse_args()
 
-  gwas_n <- find_gwas_n(metatable_path = args$metatable_path,
-                        study = args$study,
-                        gwas_n = args$gwas_n)
+  # gwas_n <- find_gwas_n( metatable_path = args$metatable_path,
+  #                        study = args$study,
+  #                        gwas_n = args$gwas_n )
 
-  output <- main(inputdir = args$inputdir,
-                 snp_map_path = args$snp_map_path,
-                 gwas_n)
+  output <- main( finemap_path = args$finemap_path,
+                  param_path = args$param_path,
+                  snp_map_path = args$snp_map_path,
+                  gwas_n = args$gwas_n )
 
-  save_files(output, args$study, args$outpath)
+  save_files(output, args$outpath)
 
   ################################################################################
   ################################################################################
 }
 
-# input_path <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/result.raw/ukb-d-30780_irnt"
-# snp_map_path <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/data.preprocessed/snp_map/ukb_b38_0.1_chrom_all.rds"
-# metatable_path <- "/home/acano/Bioadhoc/GWAS/data/meta_tables/hg38/45_diseases_metadata_original.csv"
-# outpath <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/result.refined"
+  # output <- main( finemap_path = args$finemap_path,
+  #                 param_path = args$param_path,
+  #                 screen_res_path = args$screen_res_path,
+  #                 susie_alpha_res_path = args$susie_alpha_res_path,
+  #                 z_gene_path = args$z_gene_path,
+  #                 snp_map_path = args$snp_map_path,
+  #                 study = args$study,
+  #                 gwas_n = args$gwas_n )
 
-################################################################################
-################################################################################
-# a <- lapply(names(param), function(p) {
-#     make_convergence_plots(p, gwas_n)})
+  # parser$add_argument("--screen_res_path",
+  #                     help = "",
+  #                     required = TRUE)
 
-# pdf("/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/summary/locusplot.pdf", width = 8, height = 10)
-# lapply(param, function(p) {
-#     make_convergence_plots(p, gwas_n)})
-#  dev.off()
+  # parser$add_argument("--susie_alpha_res_path",
+  #                     help = "",
+  #                     required = TRUE)
+
+  # parser$add_argument("--z_gene_path",
+  #                     help = "",
+  #                     required = TRUE)
+
+  

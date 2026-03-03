@@ -1,0 +1,228 @@
+{
+    "total_runtime": 149.9816915988922,
+    "rules": {
+        "summarise": {
+            "mean-runtime": 140.49539868036905,
+            "min-runtime": 135.72955584526062,
+            "max-runtime": 146.0293574333191
+        }
+    },
+    "files": {
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/IBD/ebi-a-GCST004131/finemap_res.tsv": {
+            "start-time": "Fri Feb 20 20:45:15 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 139.72728276252747,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/IBD/ebi-a-GCST004131/parameters_long.tsv": {
+            "start-time": "Fri Feb 20 20:45:15 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 139.72728276252747,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/IBD/ebi-a-GCST004131/parameters_wide.tsv": {
+            "start-time": "Fri Feb 20 20:45:15 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 139.72728276252747,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/IBD/ebi-a-GCST004131/heritability_table.tsv": {
+            "start-time": "Fri Feb 20 20:45:15 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 139.72728276252747,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/LDL/ukb-d-30780_irnt/finemap_res.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:45 2026",
+            "duration": 146.0293574333191,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/LDL/ukb-d-30780_irnt/parameters_long.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:45 2026",
+            "duration": 146.0293574333191,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/LDL/ukb-d-30780_irnt/parameters_wide.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:45 2026",
+            "duration": 146.0293574333191,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/LDL/ukb-d-30780_irnt/heritability_table.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:45 2026",
+            "duration": 146.0293574333191,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/SBP/ukb-a-360/finemap_res.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 135.72955584526062,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/SBP/ukb-a-360/parameters_long.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 135.72955584526062,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/SBP/ukb-a-360/parameters_wide.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 135.72955584526062,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        },
+        "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/test_smk_single/summary/SBP/ukb-a-360/heritability_table.tsv": {
+            "start-time": "Fri Feb 20 20:45:19 2026",
+            "stop-time": "Fri Feb 20 20:47:35 2026",
+            "duration": 135.72955584526062,
+            "priority": 0,
+            "resources": {
+                "_cores": 1,
+                "_nodes": 1,
+                "mem_mb": 1000,
+                "mem_mib": 954,
+                "disk_mb": 1000,
+                "disk_mib": 954,
+                "tmpdir": "<TBD>",
+                "threads": 1,
+                "mem_gb": 10,
+                "walltime": 60
+            }
+        }
+    }
+}

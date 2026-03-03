@@ -62,7 +62,7 @@ extract_gene_score_wrapper <- function(z_snp,
 ################################################################################
 ################################################################################
 # TWAS is run region by region (haploblock by haploblock) - so data needs to be
-#  preapred by haploblock.
+# preapred by haploblock.
 # Assemble inputs needed for cTWAS fine-mapping by constructing `region_data`,
 # a per-region container holding:
 # SNPID and SNP Z=score,
@@ -94,7 +94,7 @@ extract_gene_score_wrapper <- function(z_snp,
 # Post data processing and computation of z-scores of molecular traits
 # authors assemble the input data for all the regions using the function
 # assemble_region_data. It assigns molecular traits, variants and their Z-scores
-#  to each region.The assignment of a molecular trait to regions is based on the
+# to each region. The assignment of a molecular trait to regions is based on the
 # weights, i.e. variants in the prediction model, of the molecular trait.
 # The function has a few arguments to control behaviour -
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -140,7 +140,7 @@ assemble_input_data_for_regions_wrapper <- function(region_info,
 }
 
 ################################################################################
-############################ EXPRESSION MAXIMISATION ###########################
+########################### EXPECTATION MAXIMISATION ###########################
 ################################################################################
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Use est_param() function to estimate two sets of parameters - the prior
@@ -154,7 +154,7 @@ assemble_input_data_for_regions_wrapper <- function(region_info,
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # In cTWAS the latent variables are which SNPs or genes are truly causal
 # in each region.
-# Direcoty optimising the likelihood is infeasible because causuality is unkown
+# Direcoty optimising the likelihood is infeasible because causuality is unkown.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # How EM works -
 # 1) E-step (Expectation)
@@ -196,7 +196,7 @@ assemble_input_data_for_regions_wrapper <- function(region_info,
 estimate_parameters_wrapper <- function(region_data,
                                       group_prior_var_structure = "shared_all",
                                         niter_prefit = 3,
-                                        niter = 50,
+                                        niter = 150,
                                         min_group_size = 100,
                                         ncore = 6) {
 
@@ -357,6 +357,8 @@ ctwas_main_wrapper <- function(z_snp,
                                        ncore = ncore,
                                        min_group_size = min_group_size)
 
+  message("Z_gene processed")
+
   region_data <- assemble_input_data_for_regions_wrapper(region_info = region_info,
                                                          z_snp = z_snp,
                                                          z_gene = z_gene,
@@ -367,15 +369,19 @@ ctwas_main_wrapper <- function(z_snp,
                                                 min_group_size = min_group_size,
                                                          ncore = ncore)
 
+  message("region data processed")
+
   params <- estimate_parameters_wrapper(region_data = region_data,
                                         group_prior_var_structure = "shared_all",
                                         niter_prefit = 3,
-                                        niter = 50,
+                                        niter = 100,
                                         min_group_size = min_group_size,
                                         ncore = ncore)
 
   group_prior <- params$group_prior
   group_prior_var <- params$group_prior_var
+
+  message("params processed")
 
   screen_res <- screen_regions_wrapper(region_data = region_data,
                                        snp_map = snp_map,
@@ -389,6 +395,8 @@ ctwas_main_wrapper <- function(z_snp,
   screened_region_data <- screen_res$screened_region_data
   # screen_summary <- screen_res$screen_summary
 
+  message("screen_res processed")
+
   res <- Fine_map_regions_with_LD_wrapper(screened_region_data = screened_region_data,
                                           LD_map = LD_map,
                                           weights = weights,
@@ -396,6 +404,8 @@ ctwas_main_wrapper <- function(z_snp,
                                           group_prior_var = group_prior_var,
                                           L = 5,
                                           ncore = ncore)
+
+  message("susie finemap - process complete")
 
   invisible(list(`z_gene` = z_gene,
                  `param` = params,
@@ -589,6 +599,15 @@ if (sys.nframe() == 0) {
 }
 
 
+# Rscript <- "/mnt/bioadhoc/Groups/vd-vijay/jottensmeier/Projects/DICE-LUNG/cTWAS/1_workflow/scripts/4_cTWAS_Runner.R"
+# harmonised_gwas_score <- "harmonised_GWAS/Asthma/GCST010042_Han_Y_2020.rds"
+# harmonised_weights <-"process_weights/Asthma/GCST010042_Han_Y_2020/mashr_Whole_Blood.rds"
+# region_path <- "prepare_reference/region_info/ukb_b38_0.1_chrom_all.rds"
+# snp_map <- "prepare_reference/snp_map/ukb_b38_0.1_chrom_all.rds"
+# LD_map <- "prepare_reference/LD_map/ukb_b38_0.1_chrom_all.rds"
+# outpath <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/OUT/gtex_3_DICE_GWAS/single/raw/Asthma/GCST010042_Han_Y_2020"
+# fname <- "mashr_Whole_Blood"
+
 # out <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/data.preprocessed/cTWAS_output/"
 # files <- sapply(dir(out), function(name) {glue("{out}{name}")})
 # names(files) = gsub(".RDS", "", names(files))
@@ -614,7 +633,7 @@ if (sys.nframe() == 0) {
 # chromosome <- 16
 
 # main(z_snp_path = harmonised_gwas_score,
-#      weights_path = harmpnised_weights,
+#      weights_path = weights_reader(harmonised_weights),
 #      snp_map_path = snp_map_path,
 #      LD_map_path = LD_map_path,
 #      region_data_path = region_data_path,

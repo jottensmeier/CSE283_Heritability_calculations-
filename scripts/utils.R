@@ -31,6 +31,18 @@ extract_base_dir_label <- function(path) {
 ################################################################################
 ################################################################################
 
+save_RDS <- function(data, prefix) {
+  
+  dir.create(dirname(prefix),
+             recursive = TRUE, showWarnings = FALSE)
+
+  saveRDS(data, glue("{prefix}.rds"))
+
+}
+
+################################################################################
+################################################################################
+
 paste_outpath <- function(path, folder_name, add_trailing_slash = TRUE) {
   path_clean <- sub("[/\\\\]+$", "", path)
   outpath <- file.path(path_clean, folder_name)

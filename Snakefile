@@ -1,0 +1,339 @@
+import os 
+import yaml
+import pandas as pd
+
+###############################################################
+### FIRST SNAKEMAKE IMPLEMENTATION - LOTS TO BE IMPROVED ON ###
+###############################################################
+BASEDIR = os.path.dirname(os.path.realpath(workflow.snakefile))
+###############################################################
+###############################################################
+
+###############################################################
+###################### GLOBAL PARAMETERS ######################
+###############################################################
+
+meta = pd.read_csv(config["meta_path"], sep="\t")
+
+model= meta["model"].unique()[0]
+multi_outfile = f"All_Tissue_predixcan_{model}"
+
+OUT=config["OUT"]
+REGIONS_PATH= config["REGIONS_PATH"]
+LD_DIRS= config["LD_DIRS"]
+
+SAMPLES  = list(meta.study.to_list())
+DISEASES = list(meta.disease.to_list())
+DATASETS = list(meta.dataset.to_list())
+
+workdir: config["workdir"]
+
+### Clean log files
+onstart:
+	os.system(f"rm -r {config['workdir']}/logs")
+
+
+###############################################################
+####################### HELPER FUNCTIONS ######################
+###############################################################
+
+def read_config(path):
+    with open(path, "r") as stream:
+        return yaml.safe_load(stream)
+
+###############################################################
+
+def get_gwas_n(wildcards):
+    gwas_n = meta.loc[
+        (meta.dataset == wildcards.dataset) & (meta.disease == wildcards.disease), 
+        ].gwas_n.unique()
+    return int(gwas_n[0])
+
+###############################################################
+
+def finemap_files(wildcards):
+    return expand(
+        OUT + "/single/raw/{disease}/{dataset}/finemap_res/{sample}.RDS",
+        disease=wildcards.disease,
+        dataset=wildcards.dataset,
+        sample=SAMPLES
+    )
+
+###############################################################
+
+def param_files(wildcards):
+    return expand(
+        OUT + "/single/raw/{disease}/{dataset}/param/{sample}.RDS",
+        disease=wildcards.disease,
+        dataset=wildcards.dataset,
+        sample=SAMPLES
+    )
+
+###############################################################
+
+def get_weight_files(wildcards):
+    return expand(
+        "process_weights/{disease}/{dataset}/{sample}.rds",
+        disease=wildcards.disease,
+        dataset=wildcards.dataset,
+        sample=SAMPLES
+    )
+
+###############################################################
+
+def finemap_files_multi(wildcards):
+    return expand(
+        OUT + "/multi/raw/{disease}/{dataset}/finemap_res/{sample}.RDS",
+        disease=wildcards.disease, dataset=wildcards.dataset, sample=SAMPLES
+    )
+
+###############################################################
+
+def param_files_multi(wildcards):
+    return expand(
+        OUT + "/multi/raw/{disease}/{dataset}/param/{sample}.RDS",
+        disease=wildcards.disease, dataset=wildcards.dataset, sample=SAMPLES
+    )
+
+###############################################################
+######################### RULES - ALL #########################
+###############################################################
+
+rule all:
+    input:
+        expand(OUT + "/single/summary/{disease}/{dataset}/finemap_res.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/single/summary/{disease}/{dataset}/parameters_wide.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/single/summary/{disease}/{dataset}/parameters_long.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/single/summary/{disease}/{dataset}/heritability_table.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/multi/summary/{disease}/{dataset}/finemap_res.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/multi/summary/{disease}/{dataset}/parameters_long.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/multi/summary/{disease}/{dataset}/parameters_wide.tsv", zip, disease=DISEASES, dataset=DATASETS),
+        expand(OUT + "/multi/summary/{disease}/{dataset}/heritability_table.tsv", zip, disease=DISEASES, dataset=DATASETS)
+
+        # expand(
+        #     expand(OUT + "/single/raw/{disease}/{dataset}/finemap_res/{{sample}}.RDS", zip, disease=DISEASES, dataset=DATASETS),
+        #     sample=SAMPLES),
+
+
+# rule all:
+#     input:
+#         expand(expand(OUT + "/raw/{disease}/{dataset}/finemap_res/{{sample}}.RDS", zip, disease=DISEASES, dataset=DATASETS), sample=SAMPLES)
+
+###############################################################
+################## RULES - prepare_reference ##################
+###############################################################
+rule prepare_reference:
+    input:
+        region_path=REGIONS_PATH
+    output:
+        LD_map = "prepare_reference/LD_map/ukb_b38_0.1_chrom_all.rds",
+        region_info = "prepare_reference/region_info/ukb_b38_0.1_chrom_all.rds",
+        snp_map = "prepare_reference/snp_map/ukb_b38_0.1_chrom_all.rds"
+    params:
+        ld_dir=LD_DIRS,
+        outpath= lambda wildcards, output : os.path.dirname(os.path.dirname(output.LD_map))
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=10,
+        walltime=60*2
+    shell:
+        r"""
+            Rscript "{BASEDIR}/scripts/1_prepare_referece.R" \
+                --region_path "{input.region_path}" \
+                --ld_dir "{params.ld_dir}" \
+                --outpath "{params.outpath}"
+        """
+###############################################################
+##################### RULES - Process_GWAS ####################
+###############################################################
+rule Process_GWAS:
+    input:
+        GWAS_Path = f"{config['GWAS_path']}" + "/{disease}/{dataset}.tsv",
+        SNP_map_path = rules.prepare_reference.output.snp_map
+    output:
+        "harmonised_GWAS/{disease}/{dataset}.rds"
+    params:
+        prefix = lambda wildcards, output : os.path.splitext(output[0])[0]
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=32,
+        walltime=60*2
+    shell: 
+        r"""
+        Rscript "{BASEDIR}/scripts/2_Process_GWAS.R" \
+                --GWAS_Path "{input.GWAS_Path}" \
+                --SNP_map_path "{input.SNP_map_path}" \
+                --outpath "{params.prefix}"
+        """
+###############################################################
+################### RULES - process_weights ###################
+###############################################################
+rule process_weights:
+    input:
+        weight_files = f"{config['expression_weights']}" + "/{sample}.db",
+        region_path = rules.prepare_reference.output.region_info,
+        gwas_snpid_path = rules.Process_GWAS.output,
+        snp_map_path = rules.prepare_reference.output.snp_map
+    output:
+        "process_weights/{disease}/{dataset}/{sample}.rds"
+    params:
+        context = "{sample}",
+        prediction_model = meta.model.unique()[0],
+        qtl_type = "eqtl",
+        prefix = lambda wildcards, output : os.path.splitext(output[0])[0]
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=32,
+        walltime=60*2
+    shell: 
+        r"""
+           Rscript "{BASEDIR}/scripts/3_process_weights.R" \
+                --weight_files "{input.weight_files}" \
+                --region_path "{input.region_path}" \
+                --snp_map_path "{input.snp_map_path}" \
+                --gwas_snpid_path "{input.gwas_snpid_path}" \
+                --context "{params.context}" \
+                --prediction_model "{params.prediction_model}" \
+                --type "{params.qtl_type}" \
+                --outpath "{params.prefix}" \
+                --ncores 1
+        """
+###############################################################
+################ RULES - cTWAS_Runner - single ################
+###############################################################
+rule cTWAS_Runner_single:
+    input:
+        harmonised_gwas_score=rules.Process_GWAS.output,
+        harmonised_weights=rules.process_weights.output,
+        region_path=rules.prepare_reference.output.region_info,
+        snp_map=rules.prepare_reference.output.snp_map,
+        LD_map=rules.prepare_reference.output.LD_map
+    output:
+        finemap= OUT + "/single/raw/{disease}/{dataset}/finemap_res/{sample}.RDS",
+        param= OUT + "/single/raw/{disease}/{dataset}/param/{sample}.RDS",
+        region_data= OUT + "/single/raw/{disease}/{dataset}/region_data/{sample}.RDS",
+        screen_res= OUT + "/single/raw/{disease}/{dataset}/screen_res/{sample}.RDS",
+        susie_alpha_res= OUT + "/single/raw/{disease}/{dataset}/susie_alpha_res/{sample}.RDS",
+        z_gene= OUT + "/single/raw/{disease}/{dataset}/z_gene/{sample}.RDS"
+    params:
+        outputfolder=OUT + "/single/raw/{disease}/{dataset}"
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=64,
+        walltime=60*6
+    shell:
+        r"""
+         Rscript "{BASEDIR}/scripts/4_cTWAS_Runner.R" \
+            --harmonised_gwas_score "{input.harmonised_gwas_score}" \
+            --harmonised_weights "{input.harmonised_weights}" \
+            --region_path "{input.region_path}" \
+            --snp_map "{input.snp_map}" \
+            --LD_map "{input.LD_map}" \
+            --outpath "{params.outputfolder}" \
+            --fname "{wildcards.sample}"
+        """
+###############################################################
+###################### RULES - summarise ######################
+###############################################################
+
+rule summarise_single:
+    input:
+        finemap_path = finemap_files,
+        param_path = param_files,
+        snp_map_path = rules.prepare_reference.output.snp_map
+    output:
+        finemap_res = OUT + "/single/summary/{disease}/{dataset}/finemap_res.tsv",
+        parameters_long = OUT + "/single/summary/{disease}/{dataset}/parameters_long.tsv",
+        parameters_wide = OUT + "/single/summary/{disease}/{dataset}/parameters_wide.tsv",
+        heritability_table = OUT + "/single/summary/{disease}/{dataset}/heritability_table.tsv"
+    params:
+        gwas_n = get_gwas_n,
+        outpath = lambda wildcards : OUT + f"/single/summary/{wildcards.disease}/{wildcards.dataset}"
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=120,
+        walltime=60*3
+    shell:
+        r"""
+        Rscript "{BASEDIR}/scripts/5_summarise.R" \
+           --finemap_path {input.finemap_path} \
+           --param_path {input.param_path} \
+           --snp_map_path "{input.snp_map_path}" \
+           --gwas_n "{params.gwas_n}" \
+           --outpath "{params.outpath}"
+        """
+
+###############################################################
+################ RULES - cTWAS_Runner - multit ################
+###############################################################
+rule cTWAS_Runner_multi:
+    input:
+        harmonised_gwas_score = rules.Process_GWAS.output,
+        harmonised_weights = get_weight_files,
+        region_path = rules.prepare_reference.output.region_info,
+        snp_map = rules.prepare_reference.output.snp_map,
+        LD_map = rules.prepare_reference.output.LD_map
+    output:
+        finemap = OUT + "/multi/raw/{disease}/{dataset}/finemap_res/" + multi_outfile + ".RDS",
+        param = OUT + "/multi/raw/{disease}/{dataset}/param/" + multi_outfile + ".RDS",
+        region_data = OUT + "/multi/raw/{disease}/{dataset}/region_data/" + multi_outfile + ".RDS",
+        screen_res = OUT + "/multi/raw/{disease}/{dataset}/screen_res/" + multi_outfile + ".RDS",
+        susie_alpha_res = OUT + "/multi/raw/{disease}/{dataset}/susie_alpha_res/" + multi_outfile + ".RDS",
+        z_gene = OUT + "/multi/raw/{disease}/{dataset}/z_gene/" + multi_outfile + ".RDS"
+    params:
+        fname = multi_outfile,
+        outputfolder = OUT + "/multi/raw/{disease}/{dataset}"
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb=64,
+        walltime=60*6
+    shell:
+        r"""
+         Rscript "{BASEDIR}/scripts/4_cTWAS_Runner.R" \
+            --harmonised_gwas_score "{input.harmonised_gwas_score}" \
+            --harmonised_weights {input.harmonised_weights} \
+            --region_path "{input.region_path}" \
+            --snp_map "{input.snp_map}" \
+            --LD_map "{input.LD_map}" \
+            --outpath "{params.outputfolder}" \
+            --fname "{params.fname}"
+        """
+###############################################################
+###################### RULES - summarise ######################
+###############################################################
+rule summarise_multi:
+    input:
+        finemap_path = rules.cTWAS_Runner_multi.output.finemap,
+        param_path   = rules.cTWAS_Runner_multi.output.param,
+        snp_map_path = rules.prepare_reference.output.snp_map
+    output:
+        finemap_res        = OUT + "/multi/summary/{disease}/{dataset}/finemap_res.tsv",
+        parameters_long    = OUT + "/multi/summary/{disease}/{dataset}/parameters_long.tsv",
+        parameters_wide    = OUT + "/multi/summary/{disease}/{dataset}/parameters_wide.tsv",
+        heritability_table = OUT + "/multi/summary/{disease}/{dataset}/heritability_table.tsv"
+    params:
+        gwas_n = get_gwas_n,
+        outpath = lambda wildcards : OUT + f"/multi/summary/{wildcards.disease}/{wildcards.dataset}"
+    conda: "ctwas"
+    threads: 1
+    resources:
+        mem_gb = 80,
+        walltime = 60 * 3
+    shell:
+        r"""
+        Rscript "{BASEDIR}/scripts/5_summarise.R" \
+          --finemap_path {input.finemap_path} \
+          --param_path {input.param_path} \
+          --snp_map_path "{input.snp_map_path}" \
+          --gwas_n {params.gwas_n} \
+          --outpath "{params.outpath}"
+        """
+###############################################################
+############################# END #############################
+###############################################################

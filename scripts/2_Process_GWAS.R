@@ -1,12 +1,41 @@
 ################################################################################
 ################################################################################
+
+#########################
+######## UTILITY ########
+#########################
+
+get_script_dir <- function() {
+  args <- commandArgs(trailingOnly = FALSE)
+  file_arg <- grep("^--file=", args, value = TRUE)
+  if (length(file_arg) == 1) {
+    return(dirname(normalizePath(sub("^--file=", "", file_arg))))
+  }
+
+  ofile <- tryCatch(sys.frames()[[1]]$ofile, error = function(e) NULL)
+  if (!is.null(ofile)) {
+    return(dirname(normalizePath(ofile)))
+  }
+
+  if (interactive()) {
+    return(getwd())
+  }
+
+  stop("Cannot determine script directory")
+}
+
+
+################################################################################
+################################################################################
 check_col <- function(gwas) {
-  id_col <- dplyr::case_when(
-    "ID" %in% names(gwas) ~ "ID",
-    "rsid" %in% names(gwas) ~ "rsid",
-    TRUE ~ stop("No variant ID column found")
-  )
-  return(id_col)
+  nm <- names(gwas)
+
+  if ("ID" %in% nm)   return("ID")
+  if ("rsid" %in% nm) return("rsid")
+  if ("SNPID" %in% nm) return("SNPID")
+  # if ("id" %in% nm)   return("id")
+
+  stop("No variant ID column found. Columns: ", paste(nm, collapse = ", "))
 }
 
 read_VCF <- function(path) {
@@ -69,6 +98,7 @@ calculate_z_score <- function(df) {
   # expected due to p-value rounding and finite precision.
   # ------------------------------------------------------------------
   if (!"Z" %in% colnames(df)) {
+    message("z score col not present in GWAS - attempting to recover z score")
     # stop("Z-score not present - file not GWAS summary statistic")
     # MODIFY DF IN PLACE
     check_GWAS_cols(df)
@@ -79,7 +109,7 @@ calculate_z_score <- function(df) {
     # Sanity checks (optional but recommended)
     #   cor(Z, BETA) should be positive
     #   Z should be approximately N(0,1) excluding tails
-  }
+  } else {message("z score present in GWAS - proceeding")}
 }
 
 RSID_selector <- function(df) {
@@ -147,6 +177,28 @@ read_TSV <- function(path) {
 #     return(new_varIDs)
 # }
 
+check_z_score <- function(z_snp) {
+
+  BAD_Z_SCORE <- !is.finite(z_snp$z)
+  N_BAD_Z_SCORE <- sum(BAD_Z_SCORE)
+
+  if (N_BAD_Z_SCORE > 0) {
+    message("WARNING - dropping non-finite values from zsnp table")
+    z_snp <- z_snp[!BAD_Z_SCORE]
+    message("dropping ", N_BAD_Z_SCORE, " rows from gwas z scores")
+  }
+
+  return(z_snp)
+}
+
+convert_to_ukb_varIDs_fixed <- function(varIDs, ref_format = "%s:%s_%s_%s") {
+  varID_list <- strsplit(varIDs, split = "_|:")
+  vapply(seq_along(varID_list), function(i) {
+    x <- varID_list[[i]]
+    if (length(x) >= 4) sprintf(ref_format, x[1], x[2], x[3], x[4]) else varIDs[i]
+  }, character(1))
+}
+
 prepare_gwas_znps <- function(GWAS_Path, SNP_map, key) {
 
   reader <- list(`VCF` = read_VCF, `TSV` = read_TSV)
@@ -154,6 +206,8 @@ prepare_gwas_znps <- function(GWAS_Path, SNP_map, key) {
   z_snp <- reader[[key]](GWAS_Path)
   message("Total SNPs in original file")
   message(capture.output(dim(z_snp)))
+
+  z_snp <- check_z_score(z_snp)
 
   # Filter out missing, multiallelic, and strand ambiguous variants!!!
   # Convert variant IDs to match the refernce
@@ -163,7 +217,8 @@ prepare_gwas_znps <- function(GWAS_Path, SNP_map, key) {
   z_snp <- ctwas::preprocess_z_snp(z_snp, SNP_map,
                                    drop_multiallelic = TRUE,
                                    drop_strand_ambig = TRUE,
-                                   varID_converter_fun = convert_to_ukb_varIDs)
+                                   varID_converter_fun = NULL)
+                                  #  varID_converter_fun = convert_to_ukb_varIDs_fixed)
 
   message("Total SNPs in harmonised file")
   message(capture.output(dim(z_snp)))
@@ -194,18 +249,42 @@ extract_name <- function(GWAS_Path) {
 ################################################################################
 ################################################################################
 
-save_file <- function(data, outpath, label, disease) {
 
-  # dir.create(glue("{outpath}/harmonised_gwas_zsnps/{dirname}/"),
-  #            recursive = TRUE, showWarnings = FALSE)
 
-  out <- glue("{outpath}/harmonised_gwas_zsnps/{disease}")
-  print(dir.exists(out))
-  dir.create(out,
-             recursive = TRUE, showWarnings = FALSE)
+################################################################################
+################################################################################
 
-  saveRDS(data, glue("{out}/{label}.RDS"))
+extract_file_type_from_inpath <- function(inputpath) {
+  compression_ext <- c("gz", "bgz")
 
+  fname <- basename(inputpath)
+
+  # Extract last extension
+  ext <- tolower(tools::file_ext(fname))
+
+  # if compressed, strip compression and re-check extension
+  if (ext %in% compression_ext) {
+    fname2 <- sub(paste0("\\.", ext, "$"), "", fname, ignore.case=TRUE)
+    ext <- tolower(tools::file_ext(fname2))
+  }
+
+  ftype_key_dispensor <- list(
+    "vcf" = "VCF",
+    "tsv" = "TSV",
+    "txt" = "TSV",
+    "csv" = "CSV"
+  )
+
+  key <- ftype_key_dispensor[[ext]]
+
+  stop_txt <- paste0("Unsupported file type: ", fname,
+                     " (detected ext='", ext, "'). ",
+                     "Allowed: .vcf, .tsv, .txt, .csv ",
+                     "optional .gz/.bgz. compressions")
+
+  if (is.null(key)) { stop(stop_txt) }
+  print(paste("Reading file of type", ext, "file name - ", fname))
+  return(key)
 }
 
 ################################################################################
@@ -213,20 +292,26 @@ save_file <- function(data, outpath, label, disease) {
 ################################################################################
 ################################################################################
 
-main <- function(GWAS_Path, SNP_map_path, genome_version, outpath, ftype="TSV", disease) {
+main <- function(GWAS_Path, SNP_map_path, genome_version, outpath, disease) {
+
+  ftype <- extract_file_type_from_inpath(GWAS_Path)
 
   print("Executing Script")
   z_snp <- prepare_gwas_znps(GWAS_Path, readRDS(SNP_map_path), ftype)
 
   print("Extracting name")
-  study_name <- extract_name(GWAS_Path)[["study_name"]]
+  disease <- extract_name(GWAS_Path)[['parent_dir']]
+  study_name <- extract_name(GWAS_Path)[['study_name']]
 
   print("Saving file")
-  save_file(z_snp, outpath, study_name, disease)
+  save_RDS(z_snp, outpath)
 
 }
 
 if (sys.nframe() == 0) {
+  script_dir <- get_script_dir()
+  source(file.path(script_dir, "utils.R"))
+
   suppressPackageStartupMessages({
     library("glue")
     library("ctwas")
@@ -242,7 +327,8 @@ if (sys.nframe() == 0) {
   parser$add_argument("--SNP_map_path", help = "SNP map for reference", required = TRUE)
 
   parser$add_argument("--genome_version", help = "genome_version",
-                      required = TRUE)
+                      required = FALSE,
+                      default = "b38")
 
   parser$add_argument("--chromosome", type = "integer",
                       help = "chromosme, for subsetting", required = FALSE,
@@ -250,10 +336,6 @@ if (sys.nframe() == 0) {
 
   parser$add_argument("--outpath", help = "outpath to .RDS files",
                       required = TRUE)
-
-  parser$add_argument("--ftype", help = "file type to read",
-                      required = FALSE,
-                      default = "TSV")
 
   parser$add_argument("--disease", help = "file type to read",
                       required = FALSE,
@@ -268,6 +350,5 @@ if (sys.nframe() == 0) {
        SNP_map_path = args$SNP_map,
        genome_version = args$genome_version,
        outpath = args$outpath,
-       ftype = args$ftype,
        disease = args$disease)
 }

@@ -23,109 +23,137 @@ get_script_dir <- function() {
 ################################################################################
 ################################################################################
 
-read_gtex_eqtls <- function(path) {
+configure <- function(SNPID_FORMAT, CONVERT_ID_FORMAT, DB_PATH) {
 
-  table <- read.csv(path, sep = "\t")
+  if (CONVERT_ID_FORMAT && !file.exists(DB_PATH)) (
+    stop("WARNING - Selected to convert SNPID to RSID but DB_PATH does not exist.")
+  )
+
+  if (SNPID_FORMAT == "SNPID" && CONVERT_ID_FORMAT) { CONVERT_ID_FORMAT_COL = "RSID" }
+
+  if (SNPID_FORMAT == "RSID" && CONVERT_ID_FORMAT) { CONVERT_ID_FORMAT_COL = "RSID" }
+
+  return( list(
+               `CONVERT_ID_FORMAT` = CONVERT_ID_FORMAT,
+               `SNPID_FORMAT` = SNPID_FORMAT,
+               `CONVERT_ID_FORMAT_COL` = CONVERT_ID_FORMAT_COL
+               )
+               )
+}
+
+################################################################################
+################################################################################
+
+
+read_gtex_eqtls <- function(path) {
+  DT <- fread(path)
 
   extract_cols <- c("GENEID", "rsid", "SNPID", "ref", "alt", "BETA", "P")
 
-  table <- table[, extract_cols]
+  DT <- DT[, ..extract_cols]
 
-  colnames(table) <-  c("gene",
-                        "rsid",
-                        "varID",
-                        "ref_allele",
-                        "eff_allele",
-                        "weight",
-                        "pval")
+  colnames(DT) <-  c("gene",
+                     "rsid",
+                     "varID",
+                     "ref_allele",
+                     "eff_allele",
+                     "weight",
+                     "pval")
 
-  return(table)
+  # Add chromosome column
+  DT[, Chromosome := paste0("chr", sub(":.*", "", DT$varID))]
+  return(DT)
 }
 
 ################################################################################
 ################################################################################
 
 read_dice_eqtls <- function(path) {
-
-  table <- read.delim(path, stringsAsFactors = FALSE)
-
+  # # # # # # # # # # # # # # # # # # 
+  DT <- fread(path)
+  # # # # # # # # # # # # # # # # # # 
   # TO REPLACE for DICE CELLTYPES!!
-  extract_cols <- c("GENEID", "rsid", "SNPID", "ref", "alt", "BETA", "P")
-
-  table <- table[, extract_cols]
-
+  if ("rsid" %in% colnames(DT) || "RSID" %in% colnames(DT)) {
+  expected_cols <- c("GENEID", "rsid", "SNPID", "ref", "alt", "BETA", "P")
+  new_names <- c("gene", "rsid", "varID", "ref_allele", "eff_allele", "weight", "pval")
+  } else { 
+  expected_cols <- c("GENEID", "SNPID", "ref", "alt", "BETA", "P")
+  new_names <- c("gene", "varID", "ref_allele", "eff_allele", "weight", "pval")
+  }
+  # # # # # # # # # # # # # # # # # # 
+  DT <- DT[, ..expected_cols]
   # TO REPLACE for DICE CELLTYPES!!
-  colnames(table) <-  c("gene",
-                        "rsid",
-                        "varID",
-                        "ref_allele",
-                        "eff_allele",
-                        "weight",
-                        "pval")
-
-  return(table)
+  colnames(DT) <-  new_names
+  # # # # # # # # # # # # # # # # # # 
+  DT[, Chromosome := paste0("chr", sub(":.*", "", DT$varID))]
+  return(DT)
+  # # # # # # # # # # # # # # # # # # 
 }
 
-read_selector <- list("GTEX" = read_gtex_eqtls, "DICE" = read_dice_eqtls)
 ################################################################################
 ################################################################################
 
 prepare_gene_table <- function(gtf, gene_list) {
 
   df <- S4Vectors::mcols(gtf)[, c("gene_id", "gene_name", "gene_type")]
-  df <- df[df$gene_id %in% unique(gene_list), ]
-  df <- df[!duplicated(df), ]
+  df <- df[df$gene_id %in% gene_list, ]
+  df <- unique(df)
+  df <- as.data.table(as.data.frame(df))
 
-  colnames(df) <- c("gene", "genename", "gene_type")
+  setnames(
+           df,
+           old = c("gene_id", "gene_name", "gene_type"),
+           new = c("gene", "genename", "gene_type")
+           )
 
-  return(data.frame(df))
-}
-
-################################################################################
-################################################################################
-
-extract_hblocks <- function(file_paths) {
-  hblocks <- sapply(file_paths, function(path) {
-  pieces <- as.list(strsplit(path, "\\.")[[1]])
-  hblock <- pieces[length(pieces) - 1]
-  return(hblock)
-  })
-}
-
-Filter <- function(region, path_list) {
-  tmp <- path_list[grepl(region, path_list)]
-  matrix_path <- tmp[grepl(".RDS", tmp)]
-
-  data.table(
-    Chromosome = strsplit(matrix_path, "\\.|_")[[1]][7],
-    region_id = region,
-    LD_file =  matrix_path,
-    SNP_file   = tmp[grepl(".Rvar", tmp)]
-  )
-}
-
-extract_paths_regions_chrom <- function(high_level_chrom_path) {
-  file_paths <- list.files(high_level_chrom_path)
-  file_paths_long <- list.files(high_level_chrom_path, full.names = TRUE)
-  hblocks <- extract_hblocks(file_paths)
-  hblocks <- unique(unlist(unname(hblocks)))
-  df <- rbindlist(lapply(hblocks, Filter, path_list = file_paths_long))
   return(df)
 }
 
-build_path_frame_chrom_all <- function(high_level_chrom_path) {
-  print(high_level_chrom_path)
-  file_paths <- list.files(high_level_chrom_path, full.names = TRUE)
-  file_df <- rbindlist(lapply(file_paths, extract_paths_regions_chrom))
-  return(file_df)
+################################################################################
+################################################################################
+
+assemble_chromosome_ld_path_map <- function(low_level_chrom_path_hblock) {
+  file_paths <- list.files(low_level_chrom_path_hblock, full.names=TRUE)
+
+  ld_idx <- grepl("\\.RDS$", file_paths)
+  snp_idx <- grepl("\\.Rvar$", file_paths)
+
+  ld_files <- file_paths[ld_idx]
+  snp_files <- file_paths[snp_idx]
+
+  ld_names <- basename(ld_files)
+  hblocks <- sub(".*\\.(.*)\\..*$", "\\1", ld_names)
+  chroms <- sapply(strsplit(ld_names, "\\.|_"), `[`, 5)
+
+  # sanity check
+  if(length(ld_files) != length(snp_files)) {
+    warning("Number of LD files does not match number of SNP files")
+  }
+  # Build data.table
+  dt <- data.table::data.table(
+    Chromosome = chroms,
+    region_id = paste0(chroms, "_", hblocks),
+    LD_file = ld_files,
+    SNP_file = snp_files
+  )
+  return(dt)
+}
+
+build_path_frame_chrom_all <- function(LD_directory) {
+  print(LD_directory)
+  chrom_dirs <- list.dirs(LD_directory, recursive = FALSE, full.names = TRUE)
+  dt_list <- lapply(chrom_dirs, assemble_chromosome_ld_path_map)
+  dt_list <- rbindlist(dt_list)
+  dt_by_chromosome <- split(dt_list, by = "Chromosome")
+  return(dt_by_chromosome)
 }
 
 ################################################################################
 ################################################################################
 
-extract_id_from_db <- function(DB.path, SNPIDs, col = "RSID") {
+extract_id_from_db <- function(DB_PATH, SNPIDs, col = "SNPID", CONVERT_ID_FORMAT_COL) {
 
-  con <- DBI::dbConnect(RSQLite::SQLite(), DB.path)
+  con <- DBI::dbConnect(RSQLite::SQLite(), DB_PATH)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (!col %in% DBI::dbListFields(con, "Variants")) {
@@ -142,126 +170,227 @@ extract_id_from_db <- function(DB.path, SNPIDs, col = "RSID") {
     "SELECT * FROM Variants WHERE {col} IN ({snps.use})"
   )
 
-  dbsnp <- DBI::dbGetQuery(con, query)
-
-  if ("RSID" %in% colnames(dbsnp)) {
-    data.table::setnames(dbsnp, "RSID", "rsnumber_156")
+  dbsnp <- data.table(data.frame(DBI::dbGetQuery(con, query)))
+  if (CONVERT_ID_FORMAT_COL == "RSID" && CONVERT_ID_FORMAT_COL %in% colnames(dbsnp)) {
+    setnames(dbsnp, "RSID", "rsid")
+    CONVERT_ID_FORMAT_COL <- "rsid"
   }
+  # if ("RSID" %in% colnames(dbsnp)) {
+  #   data.table::setnames(dbsnp, "RSID", "rsnumber_156")
+  # }
+  print(dbsnp)
+  cols <- c(col, CONVERT_ID_FORMAT_COL)
+  return(
+         list(dbsnp[, ..cols], 
+              CONVERT_ID_FORMAT_COL)
+              )
+}
+
+merge_qtl_table_and_db_ <- function(DB_PATH, qtl_table, SNPID_FORMAT, CONVERT_ID_FORMAT_COL) {
+
+  dbsnp_l <- extract_id_from_db(
+    DB_PATH,
+    qtl_table[["varID"]],
+    col = SNPID_FORMAT,
+    CONVERT_ID_FORMAT_COL
+  )
+
+  dbsnp <- dbsnp_l[[1]]
+  CONVERT_ID_FORMAT_COL <- dbsnp_l[[2]]
+
+  dbsnp <- merge(
+    qtl_table,
+    dbsnp,
+    by.x = "varID",
+    by.y = SNPID_FORMAT
+  )
+
+  setnames(
+    dbsnp,
+    old = c("varID", CONVERT_ID_FORMAT_COL),
+    new = c(SNPID_FORMAT, "varID")
+  )
 
   return(dbsnp)
 }
 
 extract_LD_info_from <- function(matrix_path, var_path, snps.keep) {
-  matrix <- readRDS(matrix_path)
-  var <- read.table(var_path, header = TRUE)
+  M <- readRDS(matrix_path)
+  var <- read.table(var_path, header = TRUE, stringsAsFactors = TRUE)
 
-  # Find indices of SNPs to keep
-  keep_idx <- which(var$id %in% snps.keep)
-  # Subset rows and columns
-  LDsub <- matrix[keep_idx, keep_idx, drop = FALSE]
-  # Subset SNPIDs accordingly
-  snp_subset <- var$id[keep_idx]
-  # Get indices of the upper triangle (including diagonal if desired)
+  stopifnot(nrow(M) == ncol(M))
+
+  keep <- match(snps.keep, var$id)
+  keep <- keep[!is.na(keep)]
+
+  if (!length(keep)) {
+    return(data.table(RSID1 = character(),
+                      RSID2 = character(),
+                      LD = numeric()))
+  }
+
+  LDsub <- M[keep, keep, drop = FALSE]
+  snp_subset <- var$id[keep]
+
   ind <- which(upper.tri(LDsub, diag = TRUE), arr.ind = TRUE)
-  # Create data.table
-  LDlong <- data.table(
-    RSID1 = snp_subset[ind[,1 ]],
-    RSID2 = snp_subset[ind[,2 ]],
-    LD   = LDsub[ind]
+  data.table(
+    RSID1 = snp_subset[ind[, 1]],
+    RSID2 = snp_subset[ind[, 2]],
+    LD    = LDsub[ind]
   )
-  print("Done")
-  print(matrix_path)
-  print(dim(LDlong))
-  return(LDlong)
 }
 
-
-high_level_chrom_path <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/data/LD_reference/LD_BioBank/"
-chrom_paths <- build_path_frame_chrom_all(high_level_chrom_path)
-rsids <- unique(qtl_table$rsid)
-
-matrix_path<- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/data/LD_reference/LD_BioBank//1/ukb_b38_0.1_chr1.R_snp.100360849_101575460.RDS"
-var_path <- "/home/jottensmeier/BioAdHoc/Projects/DICE-LUNG/cTWAS/data/LD_reference/LD_BioBank//1/ukb_b38_0.1_chr1.R_snp.100360849_101575460.Rvar"
-
-out <- lapply(seq_len(nrow(chrom_paths)), function(i) extract_LD_info_from(chrom_paths[i, ]$LD_file, chrom_paths[i, ]$SNP_file, rsids))
-
-cov_table <- extract_LD_info_from(matrix_path, var_path, rsids)
-
-
-order <- c("gene", "RSID1", "RSID2", "LD")
-merged <- merge(cov_table, qtl_table[,c("rsid", "gene")], by.x ="RSID1", by.y ="rsid")
-merged <- merged[,order]
-
-rsid <- weights$rsid
-varid <- weights$varID
-snpd.DB.path <- "/home/jrocha/BioAdHoc/reference_panels/dbSNP/hg38/dbSNP156.db"
-
-
-converted <- extract_id_from_db(snpd.DB.path, varid, col = 'SNPID')
-weights_ss <- weights[weights$rsid %in% converted$rsnumber_156, ]
-
-snps.keep <- weights_ss$rsid
-
-
-
-
-
 ################################################################################
 ################################################################################
 
-parallele_processes <- function(qtl_paths, qtl_dbase, gtf, outdir, snpd.DB.path, ncores) {
-
-  out <- mclapply(qtl_paths, function(qtl_path) {
-
+load_table <- function(qtl_path, qtl_data_base) {
   # Load QTL table
-  qtl_table <- read_selector[[qtl_dbase]](qtl_path)
+  read_selector <- list("GTEX" = read_gtex_eqtls, "DICE" = read_dice_eqtls)
+
+  qtl_table <- read_selector[[qtl_data_base]](qtl_path)
+  qtl_table[, Chromosome := paste0("chr", sub(":.*", "", qtl_table$varID))]
+  return(qtl_table)
+}
+
+extract_LD_info_for_singular_chrom <- function(chr, LD_path_map_by_chr, snps_by_chr) {
+
+  message("Processing ", chr)
+  ld_dt <- LD_path_map_by_chr[[chr]]
+  snps_chr <- snps_by_chr[[chr]]
+
+  tables <- lapply(
+    seq_len(nrow(ld_dt)),
+        function(i) {
+          extract_LD_info_from(
+            ld_dt$LD_file[i],
+            ld_dt$SNP_file[i],
+            snps_chr
+          )
+        }
+      )
+
+  return(data.table::rbindlist(tables))
+}
+
+qtls_by_chromosome <- function(qtl_table, LD_path_map_by_chr) {
+  # Extract LD matrix paths
+
+  qtl_table <- qtl_table[Chromosome %chin% names(LD_path_map_by_chr)]
+
+  qtl_table_by_chr <- qtl_table[
+    , .(varID = list(unique(varID))), by = Chromosome ]
+
+  snps_by_chr <- setNames(
+    qtl_table_by_chr$varID,
+    qtl_table_by_chr$Chromosome
+  )
+
+  return(snps_by_chr)
+
+}
+
+create_predict_df_from_QTLs_wrapper <- function(qtl_table,
+                                                gene_table,
+                                                cov_table,
+                                                outdir,
+                                                qtl_path) {
+
   outname <- tools::file_path_sans_ext(basename(qtl_path))
-
-  # Prepare gene table using imported GTF
-  gene_table <- prepare_gene_table(gtf, unique(qtl_table$gene))
-
-  # Extract LD matrix
-  # LD_infromation <- extractLD(snpd.DB.path, SNPIDs)
-
   # Build PredictDB
   ctwas::create_predictdb_from_QTLs(
-      weight_table = qtl_table,
-      gene_table   = gene_table,
-      cov_table    = NULL,
-      use_top_QTL  = FALSE,
-      select_by    = "pval",
-      outputdir    = outdir,
-      outname      = outname
+    weight_table = qtl_table,
+    gene_table   = gene_table,
+    cov_table    = cov_table,
+    use_top_QTL  = FALSE,
+    select_by    = "weight",
+    outputdir    = outdir,
+    outname      = outname
   )
+  return(outname)
+}
+
+extract_LD_info_mc_main <- function(LD_directory, qtl_table) {
+  # Extract LD matrix paths
+  # Split LD and snps by chromosome
+  LD_path_map_by_chr <- build_path_frame_chrom_all(LD_directory)
+  snps_by_chr <- qtls_by_chromosome(qtl_table, LD_path_map_by_chr)
+
+  # Prepare LD table
+  cov_table <- mclapply(
+    names(LD_path_map_by_chr),
+
+  extract_LD_info_for_singular_chrom,
+  LD_path_map_by_chr = LD_path_map_by_chr,
+  snps_by_chr = snps_by_chr,
+  mc.cores = 10
+  )
+
+  return(data.table::rbindlist(cov_table))
+}
+
+main <- function(qtl_path,
+                 qtl_data_base,
+                 gtfpath,
+                 LD_directory,
+                 outdir,
+                 SNPID_FORMAT,
+                 CONVERT_ID_FORMAT_COL,
+                 CONVERT_ID_FORMAT,
+                 DB_PATH) {
+
+  # Load QTL table
+  qtl_table <- load_table(qtl_path, qtl_data_base)
+
+  if (CONVERT_ID_FORMAT) {
+  qtl_table <- merge_qtl_table_and_db_(DB_PATH,
+                                       qtl_table,
+                                       SNPID_FORMAT,
+                                       CONVERT_ID_FORMAT_COL)
+  }
+
+  # Prepare gene table using imported GTF
+  gtf <- rtracklayer::import(gtfpath, feature.type = "gene")
+  gene_table <- prepare_gene_table(gtf, unique(qtl_table$gene))
+
+  # Prepare LD table
+  cov_table <- extract_LD_info_mc_main(LD_directory = LD_directory,
+                                       qtl_table = qtl_table)
+  # Add gene information to LD table
+  cov_table <- merge(cov_table,
+                     qtl_table[, c("gene", "rsid")],
+                     by.x = "RSID1",
+                     by.y = "varID",
+                     allow.cartesian = TRUE)
+  # Rename relevant columns post merging tables
+  data.table::setnames(cov_table,
+                       old = c("gene", "LD"),
+                       new = c("GENE", "VALUE"))
+
+  # Generate database information
+  outname <- create_predict_df_from_QTLs_wrapper(qtl_table,
+                                                 gene_table,
+                                                 cov_table,
+                                                 outdir, qtl_path)
 
   # Return path of created DB
   file.path(outdir, paste0(outname, ".db"))
 
-  }, mc.cores = ncores)
-
-  return(out)
-
 }
 
 ################################################################################
 ################################################################################
 
+# main <- function(qtl_data_base, qtl_paths, gtfpath, outdir, ncores = 1) {
 
-################################################################################
-################################################################################
+#   # Import GTF once
+#   gtf <- rtracklayer::import(gtfpath, feature.type = "gene")
 
-main <- function(qtl_data_base, qtl_paths, gtfpath, outdir, ncores = 1) {
-
-  # Import GTF once
-  gtf <- rtracklayer::import(gtfpath, feature.type = "gene")
-
-  qtl_paths <- path_parser(qtl_paths, qtl_data_base)
-  print(qtl_paths)
-
-  out <- parallele_processes(qtl_paths, qtl_data_base, gtf, outdir, ncores)
-
-  return(out)
-}
+#   qtl_paths <- path_parser(qtl_paths, qtl_data_base)
+#   print(qtl_paths)
+  
+#   out <- parallele_processes(qtl_paths, qtl_data_base, gtf, outdir, ncores)
+#   return(out)
+# }
 
 ################################################################################
 ################################################################################
@@ -291,42 +420,67 @@ if (sys.nframe() == 0) {
                       required = TRUE,
                       choices = c("DICE", "GTEX"))
 
-  parser$add_argument("--qtl_paths",
+  parser$add_argument("--qtl_path",
                       nargs = "*",
                       help = "path to qtl yaml file or n number of paths",
                       required = TRUE)
 
-  parser$add_argument("--gtf_path",
+  parser$add_argument("--gtfpath",
                       help = "path to GTF file.",
                       required = TRUE)
 
-  parser$add_argument("--outpath", help = "outpath to .RDS files",
+  parser$add_argument("--LD_directory",
+                      help = "path to LD files for all chroms",
                       required = TRUE)
 
-  parser$add_argument("--genome_version", help = "genome_version",
+  parser$add_argument("--outpath",
+                      help = "outpath to .RDS files",
                       required = TRUE)
 
-  parser$add_argument("--ncores", help = "number of processing cores",
-                      default = 5,
-                      type = "integer",
+  parser$add_argument("--SNPID_FORMAT",
+                      required = FALSE,
+                      choices = c("SNPID", "RSID"),
+                      default = "SNPID")
+
+  parser$add_argument("--CONVERT_ID_FORMAT_COL",
+                      required = FALSE,
+                      choices = c("SNPID", "RSID"),
+                      default = "SNPID")
+
+  parser$add_argument("--CONVERT_ID_FORMAT",
+                      required = FALSE,
+                      default = FALSE,
+                      action = 'store_true')
+
+  parser$add_argument("--DB_PATH",
                       required = FALSE)
+
+  # parser$add_argument("--genome_version",
+  #                     help = "genome_version",
+  #                     required = TRUE)
 
   ######################################################
   args <- parser$parse_args()
   ######################################################
 
-  print(args)
+  config <- configure(
+    args$SNPID_FORMAT,
+    args$CONVERT_ID_FORMAT,
+    args$DB_PATH
+    )
 
-  main(
-    qtl_data_base = args$qtl_data_base,
-    qtl_paths = args$qtl_paths,
-    gtfpath = args$gtf_path,
-    outdir = args$outpath,
-    ncores = args$ncores
-  )
+  main(qtl_path = args$qtl_path,
+       qtl_data_base = args$qtl_data_base,
+       gtfpath = args$gtfpath,
+       LD_directory = args$LD_directory,
+       outdir = args$outpath,
+       SNPID_FORMAT = config$SNPID_FORMAT,
+       CONVERT_ID_FORMAT_COL = config$CONVERT_ID_FORMAT_COL,
+       CONVERT_ID_FORMAT = args$CONVERT_ID_FORMAT,
+       DB_PATH = args$DB_PATH)
 }
 
-# DB.path <- "/home/jrocha/BioAdHoc/reference_panels/dbSNP/hg38/dbSNP156.db"
+# DB_PATH <- "/home/jrocha/BioAdHoc/reference_panels/dbSNP/hg38/dbSNP156.db"
 ################################################################################
 ################################################################################
 # path <- "/home/jottensmeier/BioAdHoc/Projects/CTCF/Analysis_GRCh38_New/Intermediary/Input_Clean/filt_eQTL_catalogue/filtered/eQTL_Catalogue_1e_neg4_GTEx_ge_adipose_subcutaneous_cleaned.tsv"
@@ -490,61 +644,3 @@ if (sys.nframe() == 0) {
 #   }
 #   return(weights)
 # }
-
-
-################################################################################
-################################################################################
-################################################################################
-##################################### EXTRA ####################################
-################################################################################
-################################################################################
-################################################################################
-
-extract_hblocks <- function(path) {
-  pieces <- as.list(strsplit(path, "\\.")[[1]])
-  hblock <- pieces[length(pieces) - 1]
-  return(hblock)
-}
-
-Filter <- function(region, path_list) {
-  tmp <- path_list[grepl(region, path_list)]
-  matrix_path <- tmp[grepl(".RDS", tmp)]
-
-  data.table(
-    Chromosome = strsplit(matrix_path, "\\.|_")[[1]][7],
-    region_id = region,
-    LD_file =  matrix_path,
-    SNP_file   = tmp[grepl(".Rvar", tmp)]
-  )
-}
-
-filter_region_paths <- function(region, path_list) {
-  tmp <- path_list[grepl(region, path_list)]
-  # Identify LD and SNP files
-  ld_file <- tmp[grepl("\\.RDS$", tmp)]
-  snp_file <- tmp[grepl("\\.Rvar$", tmp)]
-
-  if (length(ld_file) != 1 || length(snp_file != 1)) {
-    warning(
-      sprintf(
-        "Region %s: expected. 1 LD and 1 SNP file, found %d and %d"
-        )
-      )
-  }
-  chrom <- strsplit(basename(ld_file), "\\.|_")[[1]][7]
-
-  data.table(
-    Chromosome = chrom,
-    region_id = region,
-    LD_file = ld_file,
-    SNP_file = snp_file
-  )
-}
-
-extract_paths_regions_chrom <- function(low_level_chrom_path_hblock) {
-  file_paths <- list.files(low_level_chrom_path_hblock, full.names = TRUE)
-  hblocks <- sub(".*\\.(.*)\\..*$", "\\1", basename(file_paths))
-  dt <- rbindlist(lapply(hblocks, filter_region_paths, path_list = file_paths))
-  return(df)
-}
-
