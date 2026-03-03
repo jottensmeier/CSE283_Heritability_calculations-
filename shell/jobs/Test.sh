@@ -10,7 +10,7 @@
 #SBATCH --output= ######## CHANGE THIS ########.out
 #SBATCH --error=  ######## CHANGE THIS ########.err
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=jottensemeier@lji.org
+#SBATCH --mail-user=######## CHANGE THIS ########
 
 #CHANGE THIS
 WORKDIR="######## CHANGE THIS ########"
@@ -20,14 +20,13 @@ cd ${WORKDIR};
 profile="../profiles/slurm"
 
 #CHANGE THIS
-# config="../../tests/configs/Autoimmune.yaml"
+configfile="../../config/config.yaml"
 logs="../runs"
 
 # Remove necessary to make sure the run info is correct
 # rm -r ${logs}
 mkdir -p ${logs}
 
-configfile="../../config/config.yaml"
 
 snakemake --profile ${profile} \
           --configfile ${configfile} \
