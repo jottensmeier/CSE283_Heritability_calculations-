@@ -5,10 +5,36 @@
 This repo contains scripts that wrap causal ctwas functions from - Zhao, S., Crouse, W., Qian, S. et al. Adjusting for genetic confounders in transcriptome-wide association studies improves discovery of risk genes of complex traits. Nat Genet 56, 336–347 (2024). https://doi.org/10.1038/s41588-023-01648-9
 
 **The goal of this project is to critically compare two cTWAS modalities for calculating heritability**
+
 1) Single tissue cTWAS
+   In single cTWAS, each gene contributes one predicted expression valriable. The model estimates a single effect size BETA-gene and corresponding PIP for that gene using
+   the association between GWAA signal and predicted expression / molecular trait for that tissue.
    
 2) Multi tissue cTWAS
+    In multi tissue model, multiple predicted expression variables are calculated for all processed tissues. These will be correlated if genes across tissues share the 
+    same / similar QTLs. cTWAS will therefore jointly estimate effects of expression variables from all tissues whilst accounting for correlation structure stored in a covariance matrix. cTWAS will shrink the effect sizes towards a shared prior and allocates posterior probability (measure of causality) across tissues.
 
+An **expression variable** is the **genetically predicted expression level of a gene**.
+
+For gene \( g \):
+
+\[
+\hat{E}_g = \sum_{i=1}^{m} w_{gi} G_i
+\]
+
+where
+
+- \( G_i \) = genotype of SNP \( i \) (often standardized)  
+- \( w_{gi} \) = prediction weight learned from an eQTL model (e.g., PrediXcan / mashR)  
+- \( m \) = number of SNPs in the prediction model  
+
+This predicted value \( \hat{E}_g \) represents the **component of gene expression determined by genetics**.
+
+In **cTWAS / TWAS**, this predicted expression acts as a **gene-level predictor variable** in the association model, allowing the method to test whether **genetically regulated expression of a gene is associated with the trait**.
+
+
+**Heritability as a readout**
+To be added....
 
 **Biological Background**
 
@@ -93,14 +119,16 @@ args -
 
 
 **3_process_weights**
-Pre-process prediction model weights (e.g. PrediXcan - elastic net or mashR models) by harmonising SNPIDs 
+Pre-process prediction model weights (e.g. PrediXcan - elastic net or mashR models) by harmonising SNPIDs and ensure that 
+LD information is available for each SNP. SNPs are then harmonised with LD panels and GWAS.
 
 args - 
 
 
 **4_cTWAS_Runner**
-Runs the core cTWAS analysis, integrating GWAS summary statistics, LD reference data, and gene expression prediction weights within a Bayesian fine-mapping framework. 
-The method jointly models SNP and gene effects to estimate posterior inclusion probabilities (PIPs) and effect size distributions for both variant and gene features.
+Runs the core cTWAS analysis, integrating GWAS summary statistics, LD reference data, and gene expression prediction weights and applying a fine-mapping utilising a Bayesian statistical approach. 
+**This method jointly models SNP and gene effects** to estimate posterior inclusion probabilities (PIPs) and effect size distributions for both variant and gene features.
+
 
 args - 
 
