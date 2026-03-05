@@ -39,7 +39,8 @@ CTWAS - ...
 Heritability - 
 
 
------- Set Up Instructions ------
+**------ Set Up Instructions ------**
+
 This file consists of wrapper scripts to process using cTWAS tool.
 Three inputs are required - 
 1) GWAS DATA -
@@ -61,7 +62,7 @@ Three inputs are required -
    For EUR LD matrix please refer to -
    https://uchicago.app.box.com/s/jqocacd2fulskmhoqnasrknbt59x3xkn
 
------- Environment Set Up: ------
+**------ Environment Set Up: ------**
 
 If not already please install mamba or conda onto your local / cluster account:
 https://github.com/conda-forge/miniforge
@@ -72,7 +73,8 @@ mamba env create -f environment.yml
 
 Environment yamls can be found in the envs folder.
 
------- CTWAS Wrapper scripts: ------
+**------ CTWAS Wrapper scripts: ------**
+
 These scripts can be run in command line 
 
 **1_prepare_referece**
@@ -107,10 +109,10 @@ Aggregates and formats cTWAS outputs across regions or tissues into analysis-rea
 This step typically combines PIPs, effect size summaries, and variance explained metrics (e.g., PVE), producing final result files for downstream interpretation, comparison, and visualization.
 args - 
 
------- Helper Script ------
+**------ Helper Script ------**
 
 
------- Running SnakeFile ------
+**------ Running SnakeFile ------**
 
 Snakefile  - for SLURM server - 
 configs
