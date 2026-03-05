@@ -24,8 +24,8 @@
 
  d)	Rank consistency of top prioritized genes.
 
- Dataset Description
- 
+ **Dataset Description**
+
  The primary dataset will consist of UK Biobank GWAS summary statistics for a complex trait (e.g., LDL - ukb-d-30780_irnt, IBD - ebi-a-GCST004131 and SBP - ukb-a-360) – at hand. 
  (I note that these data are in hg37. However, harmonisation is conducted between all datasets to ensure SNPID consistency (on RSID) considering REF-ALT also. Please refer to this tutorial)
  Gene expression prediction models have been obtained from PredictDB GTEx v8 mash-r based expression models modelling transcriptomic data by eQTL weights aligned to hg38 – at hand.
