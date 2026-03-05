@@ -1,5 +1,5 @@
  Causal Transcriptome Wide Association Study to calculate heritability of GWAS variants associated with gene expression (option 2)
- Johannes Ottensmeier – PID A69043143
+ Johannes Ottensmeier
  Project Description and Methodology – This project will assess two modalities of transcriptome-wide association using the causal-TWAS (cTWAS) tool. https://doi.org/10.1038/s41588-023-01648-9
  1.	Single-tissue cTWAS, where gene expression prediction models from one tissue are used to infer gene-level associations
  2.	Multi-tissue cTWAS, where models across multiple tissues are jointly modeled to estimate shared and tissue-specific effects
@@ -13,7 +13,7 @@
  b)	Correlation of gene-level PVE / total PVE,
  c)	Overlap among top 1%, 5% and 10% of genes.
  d)	Rank consistency of top prioritized genes.
- 
+
  Dataset Description
  The primary dataset will consist of UK Biobank GWAS summary statistics for a complex trait (e.g., LDL - ukb-d-30780_irnt, IBD - ebi-a-GCST004131 and SBP - ukb-a-360) – at hand. 
  (I note that these data are in hg37. However, harmonisation is conducted between all datasets to ensure SNPID consistency (on RSID) considering REF-ALT also. Please refer to this tutorial)
