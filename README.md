@@ -2,8 +2,6 @@
 
 ------ THIS README IS IN THE PROCESS OF BEING UPDATED ------
 
-Methods such as TWAS (Gusev et al., 2016), colocalization (Giambartolomei et al., 2014), and cTWAS.
-
 This repo contains scripts that wrap causal ctwas functions from - Zhao, S., Crouse, W., Qian, S. et al. Adjusting for genetic confounders in transcriptome-wide association studies improves discovery of risk genes of complex traits. Nat Genet 56, 336–347 (2024). https://doi.org/10.1038/s41588-023-01648-9
 
 **The goal of this project is to critically compare two cTWAS modalities for calculating heritability**
@@ -36,6 +34,7 @@ To start narrowing down causality of gwas variants, we can measure molcular phen
 These associations can be used to construct genetic prediction models of molecular traits, which form the basis of transcriptome-wide association studies (TWAS) and related methods that link genetically predicted molecular variation to complex disease risk.
 
 CTWAS - ...
+(Ignore. Methods such as TWAS (Gusev et al., 2016), colocalization (Giambartolomei et al., 2014), and cTWAS.)
 
 Heritability - 
 
