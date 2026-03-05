@@ -1,4 +1,4 @@
- Causal Transcriptome Wide Association Study to calculate heritability of GWAS variants associated with gene expression (option 2)
+ Causal Transcriptome Wide Association Study to calculate heritability of GWAS variants associated with gene expression (option 2) \n
  Johannes Ottensmeier
  Project Description and Methodology – This project will assess two modalities of transcriptome-wide association using the causal-TWAS (cTWAS) tool. https://doi.org/10.1038/s41588-023-01648-9
  1.	Single-tissue cTWAS, where gene expression prediction models from one tissue are used to infer gene-level associations
