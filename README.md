@@ -266,7 +266,14 @@ This step typically combines PIPs, effect size summaries, and variance explained
 **------ Running SnakeFile ------**
 
 Snakefile  - for SLURM server - 
-configs
+config yaml - paths to data dirs
+meta - expression, gwas , file combinations so that snakemake can fill in wild-card reference values.
+
+**------ Running BASH .sh files ------**
+
+Alternatively I have provided bash .sh files for running individual scripts on a SLURM server if preferred.
+File structure paths have been listed as relative to location of .sh file.
+
 
 
 **On going work**
