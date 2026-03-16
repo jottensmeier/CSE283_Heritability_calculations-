@@ -1,9 +1,6 @@
 import os 
 import yaml
 import pandas as pd
-
-###############################################################
-### FIRST SNAKEMAKE IMPLEMENTATION - LOTS TO BE IMPROVED ON ###
 ###############################################################
 BASEDIR = os.path.dirname(os.path.realpath(workflow.snakefile))
 ###############################################################
@@ -22,7 +19,7 @@ OUT=config["OUT"]
 REGIONS_PATH= config["REGIONS_PATH"]
 LD_DIRS= config["LD_DIRS"]
 
-SAMPLES  = list(meta.study.to_list())
+SAMPLES  = list(meta.study.unique())
 DISEASES = list(meta.disease.to_list())
 DATASETS = list(meta.dataset.to_list())
 
@@ -43,6 +40,33 @@ def read_config(path):
 
 ###############################################################
 
+def multi_ext_selecotr(wildcards):
+    EXTENSIONS = [".tsv", ".vcf.gz", ".VCF", ".VCF.gz"]
+
+    base = os.path.join(
+        config["GWAS_path"],
+        wildcards.disease,
+        wildcards.dataset
+    )
+
+    matches = [base + EXT for EXT in EXTENSIONS if os.path.exists(base + EXT)]
+
+    if len(matches) == 0:
+        raise FileNotFoundError(
+            f"No GWAS file found for {wildcards.disease}/{wildcards.dataset}. "
+            f"Attempted {', '.join(base + EXT for EXT in EXTENSIONS)}"
+        )
+    
+    if len(matches) > 1:
+        raise ValueError(
+            f"Multiple GWAS files found for {wildcards.disease}/{wildcards.dataset}: "
+            f"{', '.join(matches)}"
+        )
+
+    return matches[0]
+
+###############################################################
+
 def get_gwas_n(wildcards):
     gwas_n = meta.loc[
         (meta.dataset == wildcards.dataset) & (meta.disease == wildcards.disease), 
@@ -52,6 +76,7 @@ def get_gwas_n(wildcards):
 ###############################################################
 
 def finemap_files(wildcards):
+    print( SAMPLES )
     return expand(
         OUT + "/single/raw/{disease}/{dataset}/finemap_res/{sample}.RDS",
         disease=wildcards.disease,
@@ -147,9 +172,10 @@ rule prepare_reference:
 ###############################################################
 ##################### RULES - Process_GWAS ####################
 ###############################################################
+#  GWAS_Path = f"{config['GWAS_path']}" + "/{disease}/{dataset}",
 rule Process_GWAS:
     input:
-        GWAS_Path = f"{config['GWAS_path']}" + "/{disease}/{dataset}.tsv",
+        GWAS_path = multi_ext_selecotr,
         SNP_map_path = rules.prepare_reference.output.snp_map
     output:
         "harmonised_GWAS/{disease}/{dataset}.rds"
@@ -163,7 +189,7 @@ rule Process_GWAS:
     shell: 
         r"""
         Rscript "{BASEDIR}/scripts/2_Process_GWAS.R" \
-                --GWAS_Path "{input.GWAS_Path}" \
+                --GWAS_Path "{input.GWAS_path}" \
                 --SNP_map_path "{input.SNP_map_path}" \
                 --outpath "{params.prefix}"
         """
@@ -224,7 +250,7 @@ rule cTWAS_Runner_single:
     threads: 1
     resources:
         mem_gb=64,
-        walltime=60*6
+        walltime=60*3
     shell:
         r"""
          Rscript "{BASEDIR}/scripts/4_cTWAS_Runner.R" \
@@ -239,7 +265,6 @@ rule cTWAS_Runner_single:
 ###############################################################
 ###################### RULES - summarise ######################
 ###############################################################
-
 rule summarise_single:
     input:
         finemap_path = finemap_files,
@@ -256,7 +281,7 @@ rule summarise_single:
     conda: "ctwas"
     threads: 1
     resources:
-        mem_gb=120,
+        mem_gb=64,
         walltime=60*3
     shell:
         r"""
